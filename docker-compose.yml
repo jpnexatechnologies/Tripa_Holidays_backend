@@ -1,17 +1,13 @@
 services:
-  db:
-    image: mysql:8.4
+  mongo:
+    image: mongo:8
     restart: unless-stopped
-    environment:
-      MYSQL_DATABASE: ${DB_NAME:-tripDbExpress}
-      MYSQL_USER: ${DB_USER:-trip_app}
-      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${MONGODB_PORT:-27017}:27017"
     volumes:
-      - mysql_data:/var/lib/mysql
-      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - mongo_data:/data/db
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -23,11 +19,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: 8085
-      DB_HOST: db
-      DB_PORT: 3306
-      DB_NAME: ${DB_NAME:-tripDbExpress}
-      DB_USER: ${DB_USER:-trip_app}
-      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DB_NAME: ${MONGODB_DB_NAME:-tripaholidays}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
@@ -44,7 +37,7 @@ services:
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-tripaholidays-express-api}
       OTEL_PROMETHEUS_PORT: 9464
     depends_on:
-      db:
+      mongo:
         condition: service_healthy
   prometheus:
     image: prom/prometheus:v3.2.1
@@ -71,6 +64,6 @@ services:
     depends_on:
       - prometheus
 volumes:
-  mysql_data:
+  mongo_data:
   prometheus_data:
   grafana_data:

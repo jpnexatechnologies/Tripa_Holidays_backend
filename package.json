@@ -7,11 +7,11 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "db:init": "node src/scripts-init-db.js",
+    "db:seed-admin": "node src/scripts-seed-admin.js",
     "test": "node --test"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.19.0"
   },
   "dependencies": {
     "@opentelemetry/exporter-prometheus": "^0.223.0",
@@ -24,7 +24,7 @@
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
-    "mysql2": "^3.12.0",
+    "mongodb": "^7.7.0",
     "nodemailer": "^6.10.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"

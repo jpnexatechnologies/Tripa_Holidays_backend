@@ -276,7 +276,10 @@ module.exports = swaggerJsdoc({
       description: 'Express.js API for the TripaHolidays platform.'
     },
     servers: [{
-      url: process.env.PUBLIC_API_URL || `http://localhost:${process.env.PORT || 8085}`
+      url: process.env.PUBLIC_API_URL ||
+        (process.env.VERCEL_URL
+          ? `https://${process.env.VERCEL_URL}`
+          : `http://localhost:${process.env.PORT || 8085}`)
     }],
     tags: [
       { name: 'system' },

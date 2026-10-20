@@ -1,5 +1,13 @@
 const express = require('express')
-const { query } = require('../config/db')
+const {
+  deleteRecord,
+  findRecord,
+  getCollection,
+  insertRecord,
+  listRecords,
+  toApiDocument,
+  updateRecord
+} = require('../config/db')
 const crudRouter = require('../utils/crudRouter')
 const asyncHandler = require('../utils/asyncHandler')
 const HttpError = require('../utils/httpError')
@@ -65,56 +73,48 @@ router.use(
   })
 )
 
-// Booking submission and contact submission are public; management endpoints require an admin token.
 const bookingRouter = express.Router()
 bookingRouter.post(
   '/',
   asyncHandler(async (req, res) => {
-    const b = req.body
-    if (!b.name || !b.email)
+    const booking = req.body
+    if (!booking.name || !booking.email)
       throw new HttpError(400, 'Name and email are required.')
-    const result = await query(
-      `INSERT INTO bookings (packageId,packageTitle,name,email,phone,adults,children,groupType,days,travelDate,specialRequests,status,totalPrice)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,'PENDING',?)`,
-      [
-        b.packageId || null,
-        b.packageTitle || null,
-        b.name,
-        String(b.email).trim().toLowerCase(),
-        b.phone || null,
-        Number(b.adults || 1),
-        Number(b.children || 0),
-        b.groupType || null,
-        b.days || null,
-        b.travelDate || null,
-        b.specialRequests || null,
-        b.totalPrice || null
-      ]
-    )
-    const rows = await query('SELECT * FROM bookings WHERE id = ?', [
-      result.insertId
-    ])
-    res.status(201).json(rows[0])
+    const record = await insertRecord('bookings', {
+      packageId: booking.packageId ? Number(booking.packageId) : null,
+      packageTitle: booking.packageTitle || null,
+      name: booking.name,
+      email: String(booking.email).trim().toLowerCase(),
+      phone: booking.phone || null,
+      adults: Number(booking.adults || 1),
+      children: Number(booking.children || 0),
+      groupType: booking.groupType || null,
+      days: booking.days || null,
+      travelDate: booking.travelDate || null,
+      specialRequests: booking.specialRequests || null,
+      status: 'PENDING',
+      totalPrice: booking.totalPrice || null,
+      createdAt: new Date()
+    })
+    res.status(201).json(record)
   })
 )
 bookingRouter.get(
   '/',
   authenticate,
   requireAdmin,
-  asyncHandler(async (req, res) =>
-    res.json(await query('SELECT * FROM bookings ORDER BY createdAt DESC'))
-  )
+  asyncHandler(async (req, res) => {
+    res.json(await listRecords('bookings', { sortBy: 'createdAt' }))
+  })
 )
 bookingRouter.get(
   '/:id',
   authenticate,
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const rows = await query('SELECT * FROM bookings WHERE id = ?', [
-      req.params.id
-    ])
-    if (!rows.length) throw new HttpError(404, 'Booking not found.')
-    res.json(rows[0])
+    const booking = await findRecord('bookings', req.params.id)
+    if (!booking) throw new HttpError(404, 'Booking not found.')
+    res.json(booking)
   })
 )
 bookingRouter.put(
@@ -123,21 +123,11 @@ bookingRouter.put(
   requireAdmin,
   asyncHandler(async (req, res) => {
     const status = String(req.body.status || '').toUpperCase()
-    if (
-      !['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED', 'REJECTED'].includes(
-        status
-      )
-    )
+    if (!['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED', 'REJECTED'].includes(status))
       throw new HttpError(400, 'Unsupported booking status.')
-    const result = await query('UPDATE bookings SET status = ? WHERE id = ?', [
-      status,
-      req.params.id
-    ])
-    if (!result.affectedRows) throw new HttpError(404, 'Booking not found.')
-    const rows = await query('SELECT * FROM bookings WHERE id = ?', [
-      req.params.id
-    ])
-    res.json(rows[0])
+    if (!await updateRecord('bookings', req.params.id, { status }))
+      throw new HttpError(404, 'Booking not found.')
+    res.json(await findRecord('bookings', req.params.id))
   })
 )
 bookingRouter.delete(
@@ -145,10 +135,8 @@ bookingRouter.delete(
   authenticate,
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const result = await query('DELETE FROM bookings WHERE id = ?', [
-      req.params.id
-    ])
-    if (!result.affectedRows) throw new HttpError(404, 'Booking not found.')
+    if (!await deleteRecord('bookings', req.params.id))
+      throw new HttpError(404, 'Booking not found.')
     res.status(204).end()
   })
 )
@@ -158,47 +146,36 @@ const contactRouter = express.Router()
 contactRouter.post(
   '/',
   asyncHandler(async (req, res) => {
-    const c = req.body
-    if (!c.name || !c.email || !c.message)
+    const contact = req.body
+    if (!contact.name || !contact.email || !contact.message)
       throw new HttpError(400, 'Name, email, and message are required.')
-    const result = await query(
-      'INSERT INTO contacts (name,email,phone,subject,message) VALUES (?,?,?,?,?)',
-      [
-        c.name,
-        String(c.email).trim().toLowerCase(),
-        c.phone || null,
-        c.subject || null,
-        c.message
-      ]
-    )
-    const rows = await query('SELECT * FROM contacts WHERE id = ?', [
-      result.insertId
-    ])
-    res.status(201).json(rows[0])
+    res.status(201).json(await insertRecord('contacts', {
+      name: contact.name,
+      email: String(contact.email).trim().toLowerCase(),
+      phone: contact.phone || null,
+      subject: contact.subject || null,
+      message: contact.message,
+      isRead: false,
+      date: new Date()
+    }))
   })
 )
 contactRouter.get(
   '/',
   authenticate,
   requireAdmin,
-  asyncHandler(async (req, res) =>
-    res.json(await query('SELECT * FROM contacts ORDER BY date DESC'))
-  )
+  asyncHandler(async (req, res) => {
+    res.json(await listRecords('contacts', { sortBy: 'date' }))
+  })
 )
 contactRouter.put(
   '/:id/read',
   authenticate,
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const result = await query(
-      'UPDATE contacts SET isRead = TRUE WHERE id = ?',
-      [req.params.id]
-    )
-    if (!result.affectedRows) throw new HttpError(404, 'Contact not found.')
-    const rows = await query('SELECT * FROM contacts WHERE id = ?', [
-      req.params.id
-    ])
-    res.json(rows[0])
+    if (!await updateRecord('contacts', req.params.id, { isRead: true }))
+      throw new HttpError(404, 'Contact not found.')
+    res.json(await findRecord('contacts', req.params.id))
   })
 )
 contactRouter.delete(
@@ -206,10 +183,8 @@ contactRouter.delete(
   authenticate,
   requireAdmin,
   asyncHandler(async (req, res) => {
-    const result = await query('DELETE FROM contacts WHERE id = ?', [
-      req.params.id
-    ])
-    if (!result.affectedRows) throw new HttpError(404, 'Contact not found.')
+    if (!await deleteRecord('contacts', req.params.id))
+      throw new HttpError(404, 'Contact not found.')
     res.status(204).end()
   })
 )
@@ -219,59 +194,50 @@ const reviewRouter = express.Router()
 reviewRouter.get(
   '/',
   asyncHandler(async (req, res) => {
-    const packageId = req.query.packageId
-    const rows = packageId
-      ? await query(
-          'SELECT * FROM reviews WHERE packageId = ? ORDER BY date DESC',
-          [packageId]
-        )
-      : await query('SELECT * FROM reviews ORDER BY date DESC')
-    res.json(rows)
+    const filter = req.query.packageId === undefined
+      ? {}
+      : { packageId: Number(req.query.packageId) }
+    const collection = await getCollection('reviews')
+    const reviews = await collection.find(filter).sort({ date: -1 }).toArray()
+    res.json(reviews.map(toApiDocument))
   })
 )
 reviewRouter.post(
   '/',
   authenticate,
   asyncHandler(async (req, res) => {
-    const r = req.body
-    const rating = Number(r.rating)
+    const review = req.body
+    const rating = Number(review.rating)
     if (!Number.isInteger(rating) || rating < 1 || rating > 5)
       throw new HttpError(400, 'Rating must be an integer from 1 to 5.')
-    if (!r.name) throw new HttpError(400, 'Name is required.')
-    const result = await query(
-      'INSERT INTO reviews (packageId,userId,name,avatar,rating,comment) VALUES (?,?,?,?,?,?)',
-      [
-        r.packageId || null,
-        req.user.id,
-        r.name,
-        r.avatar || null,
-        rating,
-        r.comment || null
-      ]
-    )
-    const rows = await query('SELECT * FROM reviews WHERE id = ?', [
-      result.insertId
-    ])
-    res.status(201).json(rows[0])
+    if (!review.name) throw new HttpError(400, 'Name is required.')
+    res.status(201).json(await insertRecord('reviews', {
+      packageId: review.packageId ? Number(review.packageId) : null,
+      userId: Number(req.user.id),
+      name: review.name,
+      avatar: review.avatar || null,
+      rating,
+      comment: review.comment || null,
+      date: new Date()
+    }))
   })
 )
 reviewRouter.put(
   '/:id',
   authenticate,
   asyncHandler(async (req, res) => {
-    const rows = await query('SELECT * FROM reviews WHERE id = ?', [
-      req.params.id
-    ])
-    if (!rows.length) throw new HttpError(404, 'Review not found.')
+    const review = await findRecord('reviews', req.params.id)
+    if (!review) throw new HttpError(404, 'Review not found.')
     if (
-      Number(rows[0].userId) !== Number(req.user.id) &&
-      req.user.role !== 'ADMIN'
+      Number(review.userId) !== Number(req.user.id) &&
+      String(req.user.role).toUpperCase() !== 'ADMIN'
     )
       throw new HttpError(403, 'You can only update your own review.')
     const fields = ['name', 'avatar', 'rating', 'comment']
     const payload = {}
-    for (const field of fields)
+    for (const field of fields) {
       if (req.body[field] !== undefined) payload[field] = req.body[field]
+    }
     if (
       payload.rating !== undefined &&
       (!Number.isInteger(Number(payload.rating)) ||
@@ -279,33 +245,26 @@ reviewRouter.put(
         Number(payload.rating) > 5)
     )
       throw new HttpError(400, 'Rating must be an integer from 1 to 5.')
-    const keys = Object.keys(payload)
-    if (!keys.length) throw new HttpError(400, 'No supported fields provided.')
-    await query(
-      `UPDATE reviews SET ${keys
-        .map(k => `\`${k}\` = ?`)
-        .join(',')} WHERE id = ?`,
-      [...keys.map(k => payload[k]), req.params.id]
-    )
-    res.json(
-      (await query('SELECT * FROM reviews WHERE id = ?', [req.params.id]))[0]
-    )
+    if (!Object.keys(payload).length)
+      throw new HttpError(400, 'No supported fields provided.')
+    if (!await updateRecord('reviews', req.params.id, payload))
+      throw new HttpError(404, 'Review not found.')
+    res.json(await findRecord('reviews', req.params.id))
   })
 )
 reviewRouter.delete(
   '/:id',
   authenticate,
   asyncHandler(async (req, res) => {
-    const rows = await query('SELECT * FROM reviews WHERE id = ?', [
-      req.params.id
-    ])
-    if (!rows.length) throw new HttpError(404, 'Review not found.')
+    const review = await findRecord('reviews', req.params.id)
+    if (!review) throw new HttpError(404, 'Review not found.')
     if (
-      Number(rows[0].userId) !== Number(req.user.id) &&
-      req.user.role !== 'ADMIN'
+      Number(review.userId) !== Number(req.user.id) &&
+      String(req.user.role).toUpperCase() !== 'ADMIN'
     )
       throw new HttpError(403, 'You can only delete your own review.')
-    await query('DELETE FROM reviews WHERE id = ?', [req.params.id])
+    if (!await deleteRecord('reviews', req.params.id))
+      throw new HttpError(404, 'Review not found.')
     res.status(204).end()
   })
 )
@@ -316,13 +275,10 @@ userRouter.get(
   '/',
   authenticate,
   requireAdmin,
-  asyncHandler(async (req, res) =>
-    res.json(
-      await query(
-        'SELECT id,name,email,phone,joined,role FROM users ORDER BY id DESC'
-      )
-    )
-  )
+  asyncHandler(async (req, res) => {
+    const users = await listRecords('users')
+    res.json(users.map(({ password, ...user }) => user))
+  })
 )
 userRouter.delete(
   '/:id',
@@ -330,16 +286,12 @@ userRouter.delete(
   requireAdmin,
   asyncHandler(async (req, res) => {
     if (Number(req.params.id) === Number(req.user.id))
-      throw new HttpError(
-        400,
-        'You cannot delete your own administrator account.'
-      )
-    const result = await query('DELETE FROM users WHERE id = ?', [
-      req.params.id
-    ])
-    if (!result.affectedRows) throw new HttpError(404, 'User not found.')
+      throw new HttpError(400, 'You cannot delete your own administrator account.')
+    if (!await deleteRecord('users', req.params.id))
+      throw new HttpError(404, 'User not found.')
     res.status(204).end()
   })
 )
 router.use('/users', userRouter)
+
 module.exports = router

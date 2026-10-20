@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken')
-const { query } = require('../config/db')
+const { findRecord } = require('../config/db')
 const { jwtSecret } = require('../config/env')
 const HttpError = require('../utils/httpError')
 
@@ -10,13 +10,10 @@ async function authenticate (req, res, next) {
     if (scheme !== 'Bearer' || !token)
       throw new HttpError(401, 'Please log in to continue.')
     const claims = jwt.verify(token, jwtSecret)
-    const users = await query(
-      'SELECT id, name, email, phone, joined, role FROM users WHERE id = ? LIMIT 1',
-      [claims.sub]
-    )
-    if (!users.length)
+    const user = await findRecord('users', claims.sub)
+    if (!user)
       throw new HttpError(401, 'User account no longer exists.')
-    req.user = users[0]
+    req.user = user
     next()
   } catch (error) {
     if (error instanceof HttpError) return next(error)

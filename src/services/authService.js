@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
-const { query } = require('../config/db')
+const { findRecord, getCollection, insertRecord } = require('../config/db')
 const { jwtSecret, jwtExpiresIn } = require('../config/env')
 const HttpError = require('../utils/httpError')
 
@@ -31,32 +31,34 @@ async function register ({ name, email, password, phone }) {
   if (String(password).length < 8)
     throw new HttpError(400, 'Password must be at least 8 characters.')
   const normalizedEmail = String(email).trim().toLowerCase()
-  const existing = await query(
-    'SELECT id FROM users WHERE LOWER(email) = ? LIMIT 1',
-    [normalizedEmail]
-  )
-  if (existing.length)
+  const users = await getCollection('users')
+  if (await users.findOne({ email: normalizedEmail }, { projection: { _id: 1 } }))
     throw new HttpError(409, 'An account with this email already exists.')
   const hash = await bcrypt.hash(password, 12)
-  const result = await query(
-    "INSERT INTO users (name,email,password,phone,joined,role) VALUES (?,?,?,?,CURRENT_DATE,'USER')",
-    [String(name).trim(), normalizedEmail, hash, phone || null]
-  )
-  const [user] = await query(
-    'SELECT id,name,email,phone,joined,role FROM users WHERE id = ?',
-    [result.insertId]
-  )
+  let user
+  try {
+    user = await insertRecord('users', {
+      name: String(name).trim(),
+      email: normalizedEmail,
+      password: hash,
+      phone: phone || null,
+      joined: new Date().toISOString().slice(0, 10),
+      role: 'USER'
+    })
+  } catch (error) {
+    if (error.code === 11000)
+      throw new HttpError(409, 'An account with this email already exists.')
+    throw error
+  }
   return makeAuth(user)
 }
 async function login ({ email, password }) {
   if (!email || !password)
     throw new HttpError(400, 'Email and password are required.')
-  const rows = await query(
-    'SELECT * FROM users WHERE LOWER(email) = ? LIMIT 1',
-    [String(email).trim().toLowerCase()]
-  )
-  if (!rows.length || !(await bcrypt.compare(password, rows[0].password)))
+  const users = await getCollection('users')
+  const user = await users.findOne({ email: String(email).trim().toLowerCase() })
+  if (!user || !(await bcrypt.compare(password, user.password)))
     throw new HttpError(401, 'Invalid email or password.')
-  return makeAuth(rows[0])
+  return makeAuth({ ...user, id: user._id })
 }
 module.exports = { register, login, publicUser }
