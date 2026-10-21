@@ -15,7 +15,7 @@ Express.js API for TripaHolidays, backed by MongoDB. It retains the current API 
 ## Local development
 
 1. Install Node.js 20+ and MongoDB, or run the provided MongoDB container with `docker compose up -d mongo`.
-2. Copy `.env.example` to `.env`. Set `MONGODB_URI`, `MONGODB_DB_NAME`, a strong `JWT_SECRET` (at least 32 random characters for production), and the exact frontend origins in `CORS_ORIGINS`.
+2. Copy `.env.example` to `.env`. Set `MONGODB_URI`, `MONGODB_DB_NAME`, a strong `JWT_SECRET` (at least 32 random characters for production), and the exact frontend origins in `CORS_ORIGINS` (for example, `https://tripa-holidays-frontend.vercel.app`, without a path).
 3. Install and start the API:
 
    ```bash
