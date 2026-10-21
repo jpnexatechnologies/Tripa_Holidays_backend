@@ -23,7 +23,7 @@ Express.js API for TripaHolidays, backed by MongoDB. It retains the current API 
    npm run dev
    ```
 
-4. Check `http://localhost:8085/health` and `http://localhost:8085/api/docs`.
+4. Check `http://localhost:8085/health` and `http://localhost:8085/api/docs`. The health endpoint checks MongoDB connectivity and returns HTTP 503 when the database is unavailable.
 5. To create an initial administrator, set `SEED_ADMIN=true` and a strong `ADMIN_PASSWORD`, then run `npm run db:seed-admin`. Disable `SEED_ADMIN` after seeding.
 
 Mongo collections are created automatically. IDs are stored as numeric MongoDB `_id` values to preserve the API's existing numeric `id` fields. The users collection gets a unique email index; supporting indexes are also created at first connection.
@@ -40,6 +40,8 @@ Mongo collections are created automatically. IDs are stored as numeric MongoDB `
    - `PUBLIC_API_URL` — deployed API origin (optional; `VERCEL_URL` is used if omitted)
    - `JWT_EXPIRES_IN` and SMTP variables as needed
 4. Deploy and verify `/health`, `/api/docs`, and an API request that accesses MongoDB.
+
+If `/health` reports HTTP 503 with `database: "DOWN"` or database-backed routes return HTTP 500, verify the Vercel `MONGODB_URI` points to the production database (not `localhost`, `127.0.0.1`, or a Docker service name), the database user has read/write and index-creation privileges, and the database network policy allows the Vercel function to connect. Review the function logs for the underlying MongoDB error; API responses intentionally do not expose database details.
 
 MongoDB connections are initialized lazily and cached between warm function invocations. The API does not open a listening socket in Vercel. The standalone Prometheus exporter is enabled only by the local `src/server.js` process; it is intentionally not started inside Vercel functions.
 
@@ -67,11 +69,14 @@ The Compose stack includes MongoDB, the API, Prometheus, and Grafana. Prometheus
 | GET/PUT/DELETE | `/api/contacts` and `/:id` | Admin |
 | GET | `/api/reviews` | Public |
 | POST/PUT/DELETE | `/api/reviews` and `/:id` | Authenticated |
-| GET/DELETE | `/api/users` and `/:id` | Admin |
+| GET/POST | `/api/users` | Admin |
+| PUT/DELETE | `/api/users/:id` | Admin |
 | POST | `/api/mail/send`, `/api/mail/send-bulk` | Admin |
 | GET | `/health`, `/api/docs`, `/api/openapi.json` | Public |
 
 Protected endpoints require `Authorization: Bearer <JWT>`. Existing response paths and numeric resource IDs are preserved.
+
+Admin user creation accepts `name`, `email`, and a password of at least 8 characters; `phone` is optional and `role` defaults to `USER` (`ADMIN` is also allowed). User updates accept `name`, `email`, `password`, `phone`, and `role`. Passwords are hashed before storage and omitted from API responses. An administrator cannot remove their own admin role.
 
 ## Data migration from MySQL
 

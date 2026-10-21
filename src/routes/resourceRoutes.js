@@ -1,4 +1,5 @@
 const express = require('express')
+const bcrypt = require('bcryptjs')
 const {
   deleteRecord,
   findRecord,
@@ -271,13 +272,114 @@ reviewRouter.delete(
 router.use('/reviews', reviewRouter)
 
 const userRouter = express.Router()
+function publicUser (user) {
+  const { password, ...safeUser } = user
+  return safeUser
+}
+
+userRouter.post(
+  '/',
+  authenticate,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const { name, email, password, phone } = req.body
+    if (
+      typeof name !== 'string' || !name.trim() ||
+      typeof email !== 'string' || !email.trim() ||
+      typeof password !== 'string' || !password
+    )
+      throw new HttpError(400, 'Name, email, and password are required.')
+    if (password.length < 8)
+      throw new HttpError(400, 'Password must be at least 8 characters.')
+
+    const normalizedEmail = email.trim().toLowerCase()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail))
+      throw new HttpError(400, 'A valid email address is required.')
+
+    const users = await getCollection('users')
+    if (await users.findOne({ email: normalizedEmail }, { projection: { _id: 1 } }))
+      throw new HttpError(409, 'An account with this email already exists.')
+
+    const role = String(req.body.role || 'USER').toUpperCase()
+    if (!['USER', 'ADMIN'].includes(role))
+      throw new HttpError(400, 'Role must be USER or ADMIN.')
+
+    try {
+      const user = await insertRecord('users', {
+        name: String(name).trim(),
+        email: normalizedEmail,
+        password: await bcrypt.hash(password, 12),
+        phone: phone || null,
+        joined: new Date().toISOString().slice(0, 10),
+        role
+      })
+      res.status(201).json(publicUser(user))
+    } catch (error) {
+      if (error.code === 11000)
+        throw new HttpError(409, 'An account with this email already exists.')
+      throw error
+    }
+  })
+)
 userRouter.get(
   '/',
   authenticate,
   requireAdmin,
   asyncHandler(async (req, res) => {
     const users = await listRecords('users')
-    res.json(users.map(({ password, ...user }) => user))
+    res.json(users.map(publicUser))
+  })
+)
+userRouter.put(
+  '/:id',
+  authenticate,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const user = await findRecord('users', req.params.id)
+    if (!user) throw new HttpError(404, 'User not found.')
+
+    const payload = {}
+    if (req.body.name !== undefined) {
+      if (typeof req.body.name !== 'string' || !req.body.name.trim())
+        throw new HttpError(400, 'Name cannot be empty.')
+      payload.name = req.body.name.trim()
+    }
+    if (req.body.email !== undefined) {
+      if (typeof req.body.email !== 'string')
+        throw new HttpError(400, 'A valid email address is required.')
+      const email = req.body.email.trim().toLowerCase()
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+        throw new HttpError(400, 'A valid email address is required.')
+      payload.email = email
+    }
+    if (req.body.phone !== undefined) payload.phone = req.body.phone || null
+    if (req.body.role !== undefined) {
+      if (typeof req.body.role !== 'string')
+        throw new HttpError(400, 'Role must be USER or ADMIN.')
+      const role = String(req.body.role).toUpperCase()
+      if (!['USER', 'ADMIN'].includes(role))
+        throw new HttpError(400, 'Role must be USER or ADMIN.')
+      if (Number(user.id) === Number(req.user.id) && role !== 'ADMIN')
+        throw new HttpError(400, 'You cannot remove your own administrator role.')
+      payload.role = role
+    }
+    if (req.body.password !== undefined) {
+      if (typeof req.body.password !== 'string' || req.body.password.length < 8)
+        throw new HttpError(400, 'Password must be at least 8 characters.')
+      payload.password = await bcrypt.hash(req.body.password, 12)
+    }
+    if (!Object.keys(payload).length)
+      throw new HttpError(400, 'No supported fields provided for update.')
+
+    try {
+      if (!await updateRecord('users', req.params.id, payload))
+        throw new HttpError(404, 'User not found.')
+    } catch (error) {
+      if (error.code === 11000)
+        throw new HttpError(409, 'An account with this email already exists.')
+      throw error
+    }
+    res.json(publicUser(await findRecord('users', req.params.id)))
   })
 )
 userRouter.delete(

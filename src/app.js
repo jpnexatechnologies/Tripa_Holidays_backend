@@ -7,10 +7,12 @@ const swaggerUi = require('swagger-ui-express')
 const openapi = require('./config/swagger')
 const requestMetrics = require('./middleware/requestMetrics')
 const { corsOrigins, nodeEnv } = require('./config/env')
+const { pingDb } = require('./config/db')
 const authRoutes = require('./routes/authRoutes')
 const resourceRoutes = require('./routes/resourceRoutes')
 const mailRoutes = require('./routes/mailRoutes')
 const { notFound, errorHandler } = require('./middleware/errorHandler')
+const asyncHandler = require('./utils/asyncHandler')
 
 const app = express()
 app.disable('x-powered-by')
@@ -47,14 +49,28 @@ app.use(
     legacyHeaders: false
   })
 )
-app.get('/health', (req, res) =>
+app.get('/health', asyncHandler(async (req, res) => {
+  try {
+    await pingDb()
+  } catch (error) {
+    console.error('Health check database ping failed:', error)
+    return res.status(503).json({
+      status: 'DOWN',
+      service: 'tripaholidays-express-api',
+      environment: nodeEnv,
+      database: 'DOWN',
+      timestamp: new Date().toISOString()
+    })
+  }
+
   res.json({
     status: 'UP',
     service: 'tripaholidays-express-api',
     environment: nodeEnv,
+    database: 'UP',
     timestamp: new Date().toISOString()
   })
-)
+}))
 app.use('/api/auth', authRoutes)
 app.use('/api', resourceRoutes)
 app.use('/api/mail', mailRoutes)

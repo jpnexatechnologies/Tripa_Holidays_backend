@@ -85,8 +85,11 @@ const paths = {
   '/health': {
     get: {
       tags: ['system'],
-      summary: 'Check API health',
-      responses: { 200: response('API is healthy.') }
+      summary: 'Check API and database readiness',
+      responses: {
+        200: response('API and database are healthy.'),
+        503: response('API is running but the database is unavailable.')
+      }
     }
   },
   '/api/auth/login': {
@@ -229,9 +232,67 @@ const paths = {
       summary: 'List users',
       security: bearer,
       responses: { 200: response('Users; password hashes are excluded.') }
+    },
+    post: {
+      tags: ['users'],
+      summary: 'Create a user',
+      security: bearer,
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['name', 'email', 'password'],
+              properties: {
+                name: { type: 'string' },
+                email: { type: 'string', format: 'email' },
+                password: { type: 'string', minLength: 8 },
+                phone: { type: 'string', nullable: true },
+                role: { type: 'string', enum: ['USER', 'ADMIN'], default: 'USER' }
+              }
+            }
+          }
+        }
+      },
+      responses: {
+        201: response('User created; password is excluded.'),
+        400: response('Invalid user data.'),
+        409: response('Email address is already registered.')
+      }
     }
   },
   '/api/users/{id}': {
+    put: {
+      tags: ['users'],
+      summary: 'Update a user',
+      parameters: [idParameter],
+      security: bearer,
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                email: { type: 'string', format: 'email' },
+                password: { type: 'string', minLength: 8 },
+                phone: { type: 'string', nullable: true },
+                role: { type: 'string', enum: ['USER', 'ADMIN'] }
+              },
+              minProperties: 1
+            }
+          }
+        }
+      },
+      responses: {
+        200: response('User updated; password is excluded.'),
+        400: response('Invalid user data.'),
+        404: response('User not found.'),
+        409: response('Email address is already registered.')
+      }
+    },
     delete: {
       tags: ['users'],
       summary: 'Delete a user',
