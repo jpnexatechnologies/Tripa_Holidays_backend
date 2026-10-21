@@ -19,7 +19,7 @@ module.exports = {
   mongoDbName: process.env.MONGODB_DB_NAME || 'tripaholidays',
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '24h',
-  corsOrigins: (process.env.CORS_ORIGINS || 'https://tripa-holidays-backend.vercel.app/,http://localhost:3000')
+  corsOrigins: (process.env.CORS_ORIGINS || 'https://tripa-holidays-frontend.vercel.app/,http://localhost:3000')
     .split(',')
     .map(value => value.trim())
     .filter(Boolean),

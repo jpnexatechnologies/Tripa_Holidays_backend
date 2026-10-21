@@ -23,7 +23,7 @@ services:
       MONGODB_DB_NAME: ${MONGODB_DB_NAME:-tripaholidays}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
-      CORS_ORIGINS: ${CORS_ORIGINS:-https://tripa-holidays-backend.vercel.app/}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://tripa-holidays-frontend.vercel.app/}
       SEED_ADMIN: ${SEED_ADMIN:-false}
       ADMIN_NAME: ${ADMIN_NAME:-Trip Admin}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
