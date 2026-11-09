@@ -2,6 +2,7 @@ const { port } = require('./config/env');
 const telemetry = require('./telemetry')
 const app = require('./app');
 const { pingDb } = require('./config/db');
+const { closeTransport } = require('./services/emailService')
 
 
 async function start() {
@@ -10,6 +11,7 @@ async function start() {
   const shutdown = (signal) => {
     console.log(`${signal} received; shutting down gracefully.`);
     server.close(async () => {
+      closeTransport()
       await telemetry.shutdown();
       process.exit(0);
     });

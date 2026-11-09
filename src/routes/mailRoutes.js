@@ -1,20 +1,10 @@
 const router = require('express').Router()
-const nodemailer = require('nodemailer')
 const { smtp } = require('../config/env')
+const { getTransport } = require('../services/emailService')
 const { authenticate, requireAdmin } = require('../middleware/auth')
 const asyncHandler = require('../utils/asyncHandler')
 const HttpError = require('../utils/httpError')
 
-function getTransport () {
-  if (!smtp.host || !smtp.user || !smtp.password || !smtp.from)
-    throw new HttpError(503, 'Email service is not configured.')
-  return nodemailer.createTransport({
-    host: smtp.host,
-    port: smtp.port,
-    secure: smtp.secure,
-    auth: { user: smtp.user, pass: smtp.password }
-  })
-}
 router.get('/health', (req, res) =>
   res.json({
     success: true,

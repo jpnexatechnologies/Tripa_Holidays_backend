@@ -1,6 +1,6 @@
 # TripaHolidays Express API
 
-Express.js API for TripaHolidays, backed by MongoDB. It retains the current API route families while using JWT authentication, bcrypt password hashing, Nodemailer, Swagger UI, and OpenTelemetry request metrics.
+Express.js API for TripaHolidays, backed by MongoDB. It retains the current API route families while using JWT authentication, bcrypt password hashing, pooled Nodemailer SMTP delivery, Swagger UI, and OpenTelemetry request metrics.
 
 ## Stack
 
@@ -38,7 +38,7 @@ Mongo collections are created automatically. IDs are stored as numeric MongoDB `
    - `JWT_SECRET` — a unique secret of at least 32 random characters
    - `CORS_ORIGINS` — comma-separated, exact deployed frontend origins
    - `PUBLIC_API_URL` — deployed API origin (optional; `VERCEL_URL` is used if omitted)
-   - `JWT_EXPIRES_IN` and SMTP variables as needed
+   - `JWT_EXPIRES_IN` and SMTP variables as needed. SMTP delivery reuses a pool of up to five connections; bulk messages queue through that pool.
 4. Deploy and verify `/health`, `/api/docs`, and an API request that accesses MongoDB.
 
 If `/health` reports HTTP 503 with `database: "DOWN"` or database-backed routes return HTTP 500, verify the Vercel `MONGODB_URI` points to the production database (not `localhost`, `127.0.0.1`, or a Docker service name), the database user has read/write and index-creation privileges, and the database network policy allows the Vercel function to connect. Review the function logs for the underlying MongoDB error; API responses intentionally do not expose database details.
